@@ -9,20 +9,20 @@ import (
 	"strings"
 )
 
-type Point struct {
+type Node struct {
 	X, Y, F, G, H int
-	Parent        *Point
+	Parent        *Node
 }
 
-type Points []Point
+type Nodes []Node
 
 type Dimension struct {
 	maxX, maxY int
 }
 
 var (
-	startPoint, destPoint           Point
-	openList, closedList, obstacles Points
+	startNode, destNode             Node
+	openList, closedList, obstacles Nodes
 	dimension                       Dimension
 )
 
@@ -31,88 +31,103 @@ var ortogonalDirections = [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
 
 func main() {
 	readFile("./field")
-	if point, ok := search(); ok {
-		printPath(point)
+	if node, ok := search(); ok {
+		printPath(node)
 	}
 }
 
-func search() (current *Point, ok bool) {
+func search() (current *Node, ok bool) {
 	for len(openList) > 0 {
 		current, openList = &openList[0], openList[1:]
 		closedList = append(closedList, *current)
-		if current.X == destPoint.X && current.Y == destPoint.Y {
+		if current.equal(destNode) {
 			ok = true
 			return
 		}
 		findSiblings(current)
 	}
-	fmt.Printf("Can not found path to Point{X: %d, Y: %d}", destPoint.X, destPoint.Y)
+	fmt.Printf("Can not find path to Node{X: %d, Y: %d}", destNode.X, destNode.Y)
 	return
 }
 
-func findSiblings(p *Point) {
-	siblings(p, diagonalDirections, 14)
-	siblings(p, ortogonalDirections, 10)
+func findSiblings(n *Node) {
+	siblings(n, diagonalDirections, 14)
+	siblings(n, ortogonalDirections, 10)
 	sort.Sort(openList)
 }
 
-func siblings(p *Point, directions [][]int, cost int) {
+func siblings(n *Node, directions [][]int, cost int) {
 	for _, d := range directions {
-		cur, ok := openList.find(p.X+d[0], p.Y+d[1])
-		if !ok {
-			cur = Point{X: p.X + d[0], Y: p.Y + d[1], Parent: p, G: cost}
+		if unreachable(n, d) {
+			continue
 		}
-		if withinTheBoard(cur.X, cur.Y) && !(cur.in(obstacles) || cur.in(closedList)) {
-			manhattenDistance(&cur)
 
-			if cur.in(openList) && (pathCost(&cur)+cost) < pathCost(p) {
-				p.Parent = &cur
-			}
-			openList = append(openList, cur)
+		cur, ok := openList.find(n.X+d[0], n.Y+d[1])
+		if !ok {
+			cur = Node{X: n.X + d[0], Y: n.Y + d[1], Parent: n, G: cost}
 		}
+
+		manhattanDistance(&cur)
+		if cur.in(openList) && (pathCost(&cur)+cost) <= pathCost(n) {
+			n.Parent = &cur
+		}
+		openList = append(openList, cur)
 	}
 }
 
-func pathCost(p *Point) (cost int) {
-	for p != nil {
-		cost = cost + p.G
-		p = p.Parent
+func unreachable(n *Node, d []int) bool {
+	newX, newY := n.X+d[0], n.Y+d[1]
+	_, xObstacle := obstacles.find(newX, n.Y)
+	_, yObstacle := obstacles.find(n.X, newY)
+	_, obstacle := obstacles.find(newX, newY)
+	_, closed := closedList.find(newX, newY)
+	return !withinTheBoard(newX, newY) || obstacle || closed || (xObstacle && yObstacle)
+}
+
+func pathCost(n *Node) (cost int) {
+	for n != nil {
+		cost = cost + n.G
+		n = n.Parent
 	}
 	return
 }
 
-func manhattanDistance(current *Point) {
-	current.H = int(math.Abs(float64(destPoint.X-current.X))+math.Abs(float64(destPoint.Y-current.Y))) * 10
+func manhattanDistance(current *Node) {
+	current.H = int(math.Abs(float64(destNode.X-current.X))+math.Abs(float64(destNode.Y-current.Y))) * 10
 	current.F = current.G + current.H
 }
 
-func (p *Point) in(list Points) bool {
+func (n *Node) in(list Nodes) bool {
 	for _, el := range list {
-		if p.X == el.X && p.Y == el.Y {
+		if n.equal(el) {
 			return true
 		}
 	}
 	return false
 }
 
-func (l *Points) find(x, y int) (Point, bool) {
-	for _, p := range *l {
-		if p.X == x && p.Y == y {
-			return p, true
+func (l Nodes) find(x, y int) (Node, bool) {
+	for _, n := range l {
+		if n.X == x && n.Y == y {
+			return n, true
 		}
 	}
-	return Point{}, false
+	return Node{}, false
 }
 
-func (l Points) Less(i, j int) bool {
+func (n Node) equal(o Node) bool {
+	return n.X == o.X && n.Y == o.Y
+}
+
+func (l Nodes) Less(i, j int) bool {
 	return l[i].F < l[j].F
 }
 
-func (l Points) Len() int {
+func (l Nodes) Len() int {
 	return len(l)
 }
 
-func (l Points) Swap(i, j int) {
+func (l Nodes) Swap(i, j int) {
 	l[i], l[j] = l[j], l[i]
 }
 
@@ -135,12 +150,12 @@ func readFile(filePath string) {
 		for x, str = range line {
 			switch str {
 			case "X":
-				obstacles = append(obstacles, Point{X: x, Y: y})
+				obstacles = append(obstacles, Node{X: x, Y: y})
 			case "1":
-				startPoint = Point{X: x, Y: y}
-				openList = append(openList, startPoint)
+				startNode = Node{X: x, Y: y}
+				openList = append(openList, startNode)
 			case "2":
-				destPoint = Point{X: x, Y: y}
+				destNode = Node{X: x, Y: y}
 			}
 		}
 		y++
@@ -148,28 +163,28 @@ func readFile(filePath string) {
 	dimension = Dimension{maxX: x + 1, maxY: y}
 }
 
-func printPath(p *Point) {
-	var rightWay Points
-	for p != nil {
-		rightWay = append(rightWay, *p)
-		p = p.Parent
+func printPath(n *Node) {
+	var rightWay Nodes
+	for n != nil {
+		rightWay = append(rightWay, *n)
+		n = n.Parent
 	}
 
-	var c Point
+	var c Node
 	for y := 0; y < dimension.maxY; y++ {
 		for x := 0; x < dimension.maxX; x++ {
-			c = Point{X: x, Y: y}
+			c = Node{X: x, Y: y}
 			switch {
 			case c.in(obstacles):
-				fmt.Print(" X ")
-			case c.X == startPoint.X && c.Y == startPoint.Y:
-				fmt.Print(" 1 ")
-			case c.X == destPoint.X && c.Y == destPoint.Y:
-				fmt.Print(" 2 ")
+				fmt.Print("X", " ")
+			case c.equal(startNode):
+				fmt.Print("1", " ")
+			case c.equal(destNode):
+				fmt.Print("2", " ")
 			case c.in(rightWay):
-				fmt.Print(" + ")
+				fmt.Print("+", " ")
 			default:
-				fmt.Print(" 0 ")
+				fmt.Print(".", " ")
 			}
 		}
 		fmt.Print("\n")
