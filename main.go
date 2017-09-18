@@ -31,8 +31,19 @@ var ortogonalDirections = [][]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
 
 func main() {
 	readFile("./field")
+	checkRequires()
+
 	if node, ok := search(); ok {
 		printPath(node)
+	} else {
+		fmt.Printf("Can not find path to Node{X: %d, Y: %d}", destNode.X, destNode.Y)
+	}
+}
+
+func checkRequires() {
+	if (startNode == Node{} || destNode == Node{}) {
+		fmt.Println("Missing start/dest node!")
+		os.Exit(1)
 	}
 }
 
@@ -46,7 +57,6 @@ func search() (current *Node, ok bool) {
 		}
 		findSiblings(current)
 	}
-	fmt.Printf("Can not find path to Node{X: %d, Y: %d}", destNode.X, destNode.Y)
 	return
 }
 
